@@ -17,6 +17,7 @@ def calc_dbmf(graph: nx.Graph, mu: float) -> floating[Any]:
     """
     Degree-Based Mean-Field (DBMF) approximation for the critical infection rate beta_c in the SIS model on a network.
     It uses the heterogeneity of the degree distribution to estimate the epidemic threshold.
+
     :param graph: networkx graph
     :param mu: float, recovery rate
     :return: float, estimated critical infection rate beta_c
