@@ -1,0 +1,19 @@
+# Ignorar la carpeta de resultados completa
+results/
+
+# Ignorar el entorno virtual (muy importante)
+.venv/
+venv/
+ENV/
+
+# Ignorar configuraciones de PyCharm/IntelliJ
+.idea/
+
+# Ignorar archivos compilados de Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Ignorar archivos de sistema
+.DS_Store
+Thumbs.db
