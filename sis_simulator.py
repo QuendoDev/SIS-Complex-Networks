@@ -11,8 +11,9 @@ class SISSimulator:
 
     Methods
     ----------
-    run(graph, beta, mu, steps, transient)
-        Runs the simulation for the given network using the specified epidemic parameters.
+    run(matrix_adj, beta, mu, steps, transient, initial_fraction)
+        Simulate the SIS model using the specified epidemic parameters and return the time series of infected fraction
+        in steady state.
     """
 
     def __init__(self):
