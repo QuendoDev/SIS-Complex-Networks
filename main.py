@@ -43,9 +43,11 @@ def run_single_beta(b: float, matrix_adj: Any, mu: float, steps: int, transient:
     :param seed: int, base random seed for reproducibility
     :param N: int, number of nodes in the network (used for susceptibility calculation)
     :param is_time_series_n: bool, whether this N is the one for which we want to save the time series data for plotting
-    :return: tuple (rho_mean, chi_mean, history_to_save) where:
-             - rho_mean: float, average infected fraction in steady state for this beta
-             - chi_mean: float, average susceptibility for this beta
+    :return: tuple (rho_mean, rho_std, chi_mean, chi_std, history_to_save) where:
+             - rho_mean: float, average infected fraction in steady state
+             - rho_std: float, standard deviation of infected fraction across seeds
+             - chi_mean: float, average susceptibility
+             - chi_std: float, standard deviation of susceptibility across seeds
              - history_to_save: numpy array or None, the averaged time series of infected fraction if is_time_series_n
              is True, otherwise None
     """
@@ -81,7 +83,7 @@ def run_single_beta(b: float, matrix_adj: Any, mu: float, steps: int, transient:
     if is_time_series_n:
         history_to_save = np.mean(temp_histories, axis=0)
 
-    return np.mean(rho_means), np.mean(chi_values), history_to_save
+    return np.mean(rho_means), np.std(rho_means), np.mean(chi_values), np.std(chi_values), history_to_save
 
 
 print("=" * 60)
@@ -95,19 +97,19 @@ os.makedirs(output_dir, exist_ok=True)
 print(f"[INFO] Output directory created at: {output_dir}")
 
 # Execution options
-use_parallel = False
-n_cores = 12
+use_parallel = True
+n_cores = 12    # WARNING: Set this according to your system's capabilities. Too many cores can lead to memory issues.
 
 print(f"[INFO] Execution mode: {f'PARALLEL ({n_cores} cores)' if use_parallel else 'SEQUENTIAL'}")
 
 # Parameters
 # List of N values for Finite-Size Scaling analysis
-N_values = [1000, 2000, 5000, 10000, 20000, 50000, 100000, 500000]
+N_values = [2000, 10000, 50000, 100000, 500000]
 # Specify which N should be used for the time series plots (usually the largest)
 N_time_series = N_values[-1]
-k_avg = 10   # Average degree <k> = 5
+k_avg = 10   # Average degree <k> = 10
 mu_value = 0.2
-beta_values = np.linspace(0.002, 0.08, 50)
+beta_values = np.linspace(0.002, 0.05, 50)
 steps = 1000
 transient = 250
 initial_fraction = 0.1
@@ -117,7 +119,7 @@ num_time_series_plots = 10
 ts_indexes = np.linspace(0, len(beta_values) - 1, num_time_series_plots, dtype=int)
 
 # Number of independent simulations to average per beta
-num_seeds = 5
+num_seeds = 6
 seed = 42
 
 visual_axis = ""
@@ -140,7 +142,9 @@ network_names = ["Erdős-Rényi", "Watts-Strogatz", "Barabási-Albert"]
 
 # Dicts for the results (Nested dictionaries: results_rho[network_name][N])
 results_rho = {name: {N: [] for N in N_values} for name in network_names}
+results_rho_err = {name: {N: [] for N in N_values} for name in network_names}
 results_chi = {name: {N: [] for N in N_values} for name in network_names}
+results_chi_err = {name: {N: [] for N in N_values} for name in network_names}
 
 # Theoretical beta values storage for two approximation
 # 1. Mean-Field Approximation (MFA): Assumes a homogeneous network
@@ -162,10 +166,19 @@ for N in N_values:
     print("=" * 60)
 
     # Generate the networks for the current N
+    print("       [~] Generating Erdős-Rényi graph (this may take a moment for large N)...")
+    er_graph = nx.erdos_renyi_graph(N, k_avg / N)
+
+    print("       [~] Generating Watts-Strogatz graph...")
+    ws_graph = nx.watts_strogatz_graph(N, k_avg, 0.1)
+
+    print("       [~] Generating Barabási-Albert graph...")
+    ba_graph = nx.barabasi_albert_graph(N, k_avg // 2)
+
     networks = {
-        "Erdős-Rényi": nx.erdos_renyi_graph(N, k_avg / N),
-        "Watts-Strogatz": nx.watts_strogatz_graph(N, k_avg, 0.1),
-        "Barabási-Albert": nx.barabasi_albert_graph(N, k_avg // 2)
+        "Erdős-Rényi": er_graph,
+        "Watts-Strogatz": ws_graph,
+        "Barabási-Albert": ba_graph
     }
 
     beta_c_dbmf = {net_name: calc_dbmf(G, mu_value) for net_name, G in networks.items()}
@@ -201,9 +214,11 @@ for N in N_values:
                 results.append(res)
 
         # Process the results is the same for both methods
-        for b_idx, (r_mean, c_mean, hist) in enumerate(results):
+        for b_idx, (r_mean, r_std, c_mean, c_std, hist) in enumerate(results):
             results_rho[name][N].append(r_mean)
+            results_rho_err[name][N].append(r_std)
             results_chi[name][N].append(c_mean)
+            results_chi_err[name][N].append(c_std)
 
             if hist is not None:
                 saved_time_series[name][beta_values[b_idx]] = hist
@@ -213,11 +228,12 @@ for N in N_values:
               f"{beta_c_dbmf_dict[name][N]:.4f}")
 
         # Save raw data for this network and this N
-        data_to_save = np.column_stack((beta_values, results_rho[name][N], results_chi[name][N]))
+        data_to_save = np.column_stack((beta_values, results_rho[name][N], results_rho_err[name][N],
+                                        results_chi[name][N], results_chi_err[name][N]))
         safe_name = (name.replace("ő", "o").replace("é", "e").replace("á", "a")
                      .replace("-", "_"))
         dat_filepath = os.path.join(output_dir, f"{safe_name}_N{N}_results.dat")
-        np.savetxt(dat_filepath, data_to_save, header="beta rho_mean susceptibility", fmt="%.6f")
+        np.savetxt(dat_filepath, data_to_save, header="beta rho_mean rho_std susceptibility chi_std", fmt="%.6f")
 
 print("\n[INFO] All simulations completed successfully.")
 print("[INFO] Generating and saving plots...")
@@ -234,7 +250,8 @@ for name in network_names:
     # ---------------------------------------------------------
     plt.figure(figsize=(10, 6))
     for N in N_values:
-        plt.plot(beta_values, results_rho[name][N], marker='o', markersize=4, label=f'Data N={N}')
+        plt.errorbar(beta_values, results_rho[name][N], yerr=results_rho_err[name][N],
+                     marker='o', markersize=4, capsize=3, label=f'Data N={N}')
 
     # Add Theoretical Values for this specific network (using the largest N for DBMF reference)
     plt.axvline(x=beta_c_mfa, color='black', linestyle=':', label='MFA (Homogeneous)')
@@ -255,15 +272,12 @@ for name in network_names:
     plt.figure(figsize=(10, 6))
 
     for N in N_values:
-        line = plt.plot(beta_values, results_chi[name][N], marker='s', markersize=4, label=f'Data N={N}')[0]
-        color_line = line.get_color()
+        plt.errorbar(beta_values, results_chi[name][N], yerr=results_chi_err[name][N],
+                     marker='s', markersize=4, capsize=3, label=f'Data N={N}')
 
         # Find the index of the maximum susceptibility
         max_idx = np.argmax(results_chi[name][N])
         beta_c_dict[name][N] = beta_values[max_idx]
-
-        # Mark the empirical peak
-        plt.axvline(x=beta_c_dict[name][N], color=color_line, linestyle='--', alpha=0.5, label=f'Peak N={N}')
         print(f"[INFO] Estimated beta_c for {name} (N={N}): {beta_c_dict[name][N]:.4f}")
 
     # Add Theoretical Values for this specific network
@@ -373,9 +387,10 @@ for name in sorted_names_for_legend:
     net_color = comparison_color_map.get(name, "black")
 
     # Explicitly use [N_time_series] data
-    line = plt.plot(beta_values, results_rho[name][N_time_series],
-                    marker='o', markersize=4, color=net_color,
-                    label=f'Data: {name}')[0]
+    line = plt.errorbar(beta_values, results_rho[name][N_time_series],
+                        yerr=results_rho_err[name][N_time_series],
+                        marker='o', markersize=4, color=net_color, capsize=3,
+                        label=f'Data: {name}')[0]
 
     # Store handle using a tuple key (Network Name, 'data')
     plot_handles[(name, 'data')] = line
@@ -422,17 +437,15 @@ for name in sorted_names_for_legend:
     net_color = comparison_color_map.get(name, "black")
 
     # Plot empirical data
-    line = plt.plot(beta_values, results_chi[name][N_time_series],
-                    marker='s', markersize=4, color=net_color,
-                    label=f'Data: {name}')[0]
+    line = plt.errorbar(beta_values, results_chi[name][N_time_series],
+                        yerr=results_chi_err[name][N_time_series],
+                        marker='s', markersize=4, color=net_color, capsize=3,
+                        label=f'Data: {name}')[0]
     plot_handles[(name, 'data')] = line
 
-    # Find and mark empirical peak
+    # Find the empirical peak for Plot 7
     max_idx = np.argmax(results_chi[name][N_time_series])
     beta_c_comp_dict[name] = beta_values[max_idx]
-    peak_line = plt.axvline(x=beta_c_comp_dict[name], color=net_color,
-                            linestyle='--', alpha=0.5, label=f'Peak: {name}')
-    plot_handles[(name, 'peak')] = peak_line
 
     # Add theoretical DBMF
     dbmf_line = plt.axvline(x=beta_c_dbmf_dict[name][N_time_series],
@@ -447,7 +460,6 @@ mfa_line = plt.axvline(x=beta_c_mfa, color='black', linestyle=':', label='MFA (H
 grouped_handles = []
 for n in sorted_names_for_legend:
     if (n, 'data') in plot_handles: grouped_handles.append(plot_handles[(n, 'data')])
-    if (n, 'peak') in plot_handles: grouped_handles.append(plot_handles[(n, 'peak')])
     if (n, 'dbmf') in plot_handles: grouped_handles.append(plot_handles[(n, 'dbmf')])
 grouped_handles.append(mfa_line)
 
