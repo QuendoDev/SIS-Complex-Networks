@@ -407,6 +407,21 @@ Possible extensions include:
 
 ---
 
+## References
+
+- Muñoz, M. A., Juhász, R., Castellano, C. & Ódor, G. — *Griffiths Phases on Complex Networks*, Phys. Rev. Lett. **105**, 128701 (2010).
+- Pastor-Satorras, R., Castellano, C., Van Mieghem, P. & Vespignani, A. — *Epidemic processes in complex networks*, Rev. Mod. Phys. **87**, 925 (2015).
+- Albert, R. & Barabási, A.-L. — *Statistical mechanics of complex networks*, Rev. Mod. Phys. **74**, 47 (2002).
+- Dorogovtsev, S. N., Goltsev, A. V. & Mendes, J. F. F. — *Critical phenomena in complex networks*, Rev. Mod. Phys. **80**, 1275 (2008).
+- Ódor, G. — *Universality classes in nonequilibrium lattice systems*, Rev. Mod. Phys. **76**, 663 (2004).
+- Noest, A. J. — *New universality for spatially disordered cellular automata and directed percolation*, Phys. Rev. Lett. **57**, 90 (1986).
+- Bray, A. J. — *Nature of the Griffiths phase*, Phys. Rev. Lett. **59**, 586 (1987).
+- Vojta, T. — *Rare region effects at classical, quantum and nonequilibrium phase transitions*, J. Phys. A **39**, R143 (2006).
+- Lee, M. Y. & Vojta, T. — *Absorbing-state phase transitions on percolating lattices*, Phys. Rev. E **79**, 041112 (2009).
+- Roig Oliver, A. & Martorell Argemí, C. M. — *Proyectos de Sistemas Complejos: Enunciados y Guía de Modelado*, Universidad de Granada (2026).
+
+---
+
 # About
 
 Developed for the course:
