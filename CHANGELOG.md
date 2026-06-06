@@ -1,6 +1,6 @@
 # Changelog
 
-## [1.0.0] — 2025-XX-XX
+## [1.0.0] — 2026-06-06
 ### Added
 - Full SIS simulation pipeline on ER, WS and BA networks.
 - Griffiths phase analysis with extensible disorder framework.
