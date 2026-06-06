@@ -1,15 +1,13 @@
 import os
 import random
-from datetime import datetime
 from typing import Any
 
 import matplotlib.pyplot as plt
 import numpy as np
 import scipy.sparse as sp
 from joblib import Parallel, delayed
-from scipy import stats
 
-from griffiths_simulator import SISGriffithsSimulator
+from src.simulators.griffiths_simulator import SISGriffithsSimulator
 from abc import ABC, abstractmethod
 
 
@@ -266,8 +264,8 @@ if __name__ == '__main__':
         target_beta = active_disorder_model.get_target_beta()
 
         # Directories scoped by model AND parameters to avoid overwriting cache
-        data_dir = os.path.join("results_griffiths", "data_cache", folder_name)
-        plots_dir = os.path.join("results_griffiths", "plots", folder_name)
+        data_dir = os.path.join("../../results_griffiths", "data_cache", folder_name)
+        plots_dir = os.path.join("../../results_griffiths", "plots", folder_name)
 
         if generate_main:
             os.makedirs(data_dir, exist_ok=True)

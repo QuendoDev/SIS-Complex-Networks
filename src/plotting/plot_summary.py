@@ -217,8 +217,8 @@ if __name__ == '__main__':
     k = 3.0
     mu = 0.3
 
-    BASE_CACHE_DIR = os.path.join("results_griffiths", "data_cache")
-    OUTPUT_PLOTS_DIR = os.path.join("results_griffiths", "plots", "summary_spectrums")
+    BASE_CACHE_DIR = os.path.join("../../results_griffiths", "data_cache")
+    OUTPUT_PLOTS_DIR = os.path.join("../../results_griffiths", "plots", "summary_spectrums")
 
     q_input = input("[?] Enter the q value you want to plot (e.g., 0.3, 0.9, 2/3): ").strip()
 

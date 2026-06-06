@@ -179,7 +179,7 @@ if __name__ == '__main__':
 
     K_AVG = 3.0
     MU_VALUE = 0.3
-    OUTPUT_DIRECTORY = os.path.join("results_griffiths", "plots")
+    OUTPUT_DIRECTORY = os.path.join("../../results_griffiths", "plots")
 
     # Define the 5 modes required
     modes_to_generate = [

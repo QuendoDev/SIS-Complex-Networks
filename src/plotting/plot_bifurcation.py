@@ -97,7 +97,7 @@ if __name__ == '__main__':
     print("=" * 60)
 
     MU_VALUE = 0.2
-    OUTPUT_DIRECTORY = os.path.join("results_griffiths", "plots")
+    OUTPUT_DIRECTORY = os.path.join("../../results_griffiths", "plots")
 
     plot_transcritical_bifurcation(mu=MU_VALUE, output_dir=OUTPUT_DIRECTORY)
 

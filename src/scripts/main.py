@@ -11,7 +11,7 @@ from joblib import Parallel, delayed
 from numpy import floating
 from scipy import stats
 
-from sis_simulator import compute_susceptibility, SISSimulator
+from src.simulators.sis_simulator import compute_susceptibility, SISSimulator
 
 
 def calc_dbmf(graph: nx.Graph, mu: float) -> floating[Any]:
@@ -134,8 +134,8 @@ else:  # Default to 1 (or any invalid input for safety)
     generate_main = False
     generate_dense = False
 
-data_dir = os.path.join("results", "data_cache")
-plots_dir = os.path.join("results", "plots")
+data_dir = os.path.join("../../results", "data_cache")
+plots_dir = os.path.join("../../results", "plots")
 
 # Directory and Cache management based on the flags
 if generate_main:

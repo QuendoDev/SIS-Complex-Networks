@@ -130,8 +130,8 @@ if __name__ == '__main__':
     print("       SIS Model - Finite-Size Cutoff Plotter")
     print("=" * 60)
 
-    BASE_CACHE_DIR = os.path.join("results_griffiths", "data_cache")
-    OUTPUT_PLOTS_DIR = os.path.join("results_griffiths", "plots", "finite_size_effects")
+    BASE_CACHE_DIR = os.path.join("../../results_griffiths", "data_cache")
+    OUTPUT_PLOTS_DIR = os.path.join("../../results_griffiths", "plots", "finite_size_effects")
 
     q_input = input("[?] Enter the q value you want to plot FSS for (e.g., 0.9): ").strip()
 
