@@ -1,17 +1,18 @@
+import json
 import os
 import random
-from datetime import datetime
 from typing import Any
 
-import numpy as np
-import networkx as nx
 import matplotlib.pyplot as plt
-from numpy import floating
-from scipy import stats
-from sis_simulator import compute_susceptibility, SISSimulator
-
+import networkx as nx
+import numpy as np
 # Only for parallel simulation
 from joblib import Parallel, delayed
+from numpy import floating
+from scipy import stats
+
+from sis_simulator import compute_susceptibility, SISSimulator
+
 
 def calc_dbmf(graph: nx.Graph, mu: float) -> floating[Any]:
     """
@@ -28,8 +29,8 @@ def calc_dbmf(graph: nx.Graph, mu: float) -> floating[Any]:
     return mu * k_mean / k2_mean
 
 
-def run_single_beta(b: float, matrix_adj: Any, mu: float, steps: int, transient: int, initial_fraction: float,
-                    num_seeds: int, seed: int, N: int, is_time_series_n: bool) -> tuple:
+def run_single_beta(b: float, matrix_adj: Any, mu: float, steps: int, transient: int,
+                    initial_fraction: float, num_seeds: int, seed: int, N: int, is_time_series_n: bool) -> tuple:
     """
     Function to be executed in parallel for a single beta value.
 
@@ -43,319 +44,607 @@ def run_single_beta(b: float, matrix_adj: Any, mu: float, steps: int, transient:
     :param seed: int, base random seed for reproducibility
     :param N: int, number of nodes in the network (used for susceptibility calculation)
     :param is_time_series_n: bool, whether this N is the one for which we want to save the time series data for plotting
-    :return: tuple (rho_mean, rho_std, chi_mean, chi_std, history_to_save) where:
-             - rho_mean: float, average infected fraction in steady state
-             - rho_std: float, standard deviation of infected fraction across seeds
-             - chi_mean: float, average susceptibility
-             - chi_std: float, standard deviation of susceptibility across seeds
-             - history_to_save: numpy array or None, the averaged time series of infected fraction if is_time_series_n
-             is True, otherwise None
+    :return: tuple (rho_mean, rho_std, chi_mean, chi_std, history_to_save)
     """
 
-    # Temp lists for tracking data
     rho_means = []
     chi_values = []
     history_to_save = None
     temp_histories = []
 
-    # Execute simulations for the current beta
     for s in range(num_seeds):
         current_seed = seed + s
         np.random.seed(current_seed)
         random.seed(current_seed)
 
-        # Execute simulation using a local simulator to avoid thread safety issues
         local_sim = SISSimulator()
         rho_full_history = local_sim.run(matrix_adj, b, mu, steps, transient, initial_fraction)
 
-        # Slice the array to get only the steady-state for statistics
         rho_steady_state = rho_full_history[transient:]
 
-        # Calculate and save the stats for this specific run
         rho_means.append(np.mean(rho_steady_state))
         chi_values.append(compute_susceptibility(rho_steady_state, N))
 
-        # Cache history only if it's the chosen N for time series
         if is_time_series_n:
             temp_histories.append(rho_full_history)
 
-    # Save the averaged time series (if applicable)
     if is_time_series_n:
         history_to_save = np.mean(temp_histories, axis=0)
 
     return np.mean(rho_means), np.std(rho_means), np.mean(chi_values), np.std(chi_values), history_to_save
 
 
+def run_dense_grid(beta_c: float, tolerance: float, points: int, matrix_adj: Any, mu: float, steps: int,
+                   transient: int, initial_fraction: float, num_seeds: int, seed: int, N: int,
+                   n_cores: int) -> tuple:
+    """
+    Generate and simulate a dense grid of beta values strictly just above the critical point to fit critical exponents.
+
+    :param beta_c: float, previously calculated critical infection rate
+    :param tolerance: float, width of the dense window above beta_c
+    :param points: int, number of points in the dense grid
+    :param matrix_adj: numpy array (N, N), adjacency matrix
+    :param mu: float, recovery rate
+    :param steps: int, total steps
+    :param transient: int, steps to discard
+    :param initial_fraction: float, initial infected fraction
+    :param num_seeds: int, runs to average
+    :param seed: int, random seed
+    :param N: int, number of nodes
+    :param n_cores: int, cores for parallelization
+    :return: tuple (dense_betas, dense_rho_means), arrays of beta values and their corresponding steady rho
+    """
+    dense_betas = np.linspace(beta_c + 1e-4, beta_c + tolerance, points)
+
+    results = Parallel(n_jobs=n_cores, backend="threading")(
+        delayed(run_single_beta)(
+            b, matrix_adj, mu, steps, transient, initial_fraction, num_seeds, seed, N, False
+        )
+        for b in dense_betas
+    )
+
+    dense_rho_means = np.array([res[0] for res in results])
+    return dense_betas, dense_rho_means
+
+
 print("=" * 60)
 print("       SIS Model Simulation on Complex Networks")
 print("=" * 60)
 
-# Setup output directory
-timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-output_dir = os.path.join("results", f"run_{timestamp}")
-os.makedirs(output_dir, exist_ok=True)
-print(f"[INFO] Output directory created at: {output_dir}")
+# =========================================================================
+# 1. USER INTERFACE & DIRECTORY SETUP
+# =========================================================================
+print("Select data generation mode:")
+print("  [1] Use existing data from cache (Generate NOTHING, just plot)")
+print("  [2] Generate ONLY dense grid data (Requires cached main data)")
+print("  [3] Generate ALL data (Clears cache and runs full 100% simulation)")
+user_input = input("[?] Enter your choice (1/2/3): ").strip()
 
-# Execution options
+# Set boolean flags based on user choice
+generate_main = False
+generate_dense = False
+
+if user_input == '3':
+    generate_main = True
+    generate_dense = True
+elif user_input == '2':
+    generate_main = False
+    generate_dense = True
+else:  # Default to 1 (or any invalid input for safety)
+    generate_main = False
+    generate_dense = False
+
+data_dir = os.path.join("results", "data_cache")
+plots_dir = os.path.join("results", "plots")
+
+# Directory and Cache management based on the flags
+if generate_main:
+    os.makedirs(data_dir, exist_ok=True)
+    # Clear previous cache to avoid mixing old and new simulation data
+    for f in os.listdir(data_dir):
+        os.remove(os.path.join(data_dir, f))
+    print(f"[INFO] Cleared cache. Generating ALL new data into: {data_dir}")
+elif generate_dense:
+    # Safety check: We cannot do a dense grid if we don't have the main beta_c calculated
+    if not os.path.exists(data_dir) or not any(f.startswith("main_") for f in os.listdir(data_dir)):
+        print("[ERROR] No cached main data found to build dense grid upon. Reverting to Generate ALL.")
+        generate_main = True
+        os.makedirs(data_dir, exist_ok=True)
+    else:
+        print(f"[INFO] Keeping main cache. Generating ONLY dense grid into: {data_dir}")
+else:
+    # Safety check: We can't plot if there is no data
+    if not os.path.exists(data_dir) or len(os.listdir(data_dir)) == 0:
+        print("[ERROR] No cached data found. Defaulting to Generate ALL.")
+        generate_main = True
+        generate_dense = True
+        os.makedirs(data_dir, exist_ok=True)
+    else:
+        print(f"[INFO] Loading ALL data from cache: {data_dir}")
+
+os.makedirs(plots_dir, exist_ok=True)
+
+# =========================================================================
+# 2. PARAMETERS & INITIALIZATION
+# =========================================================================
 use_parallel = True
-n_cores = 12    # WARNING: Set this according to your system's capabilities. Too many cores can lead to memory issues.
+n_cores = 12
 
-print(f"[INFO] Execution mode: {f'PARALLEL ({n_cores} cores)' if use_parallel else 'SEQUENTIAL'}")
-
-# Parameters
-# List of N values for Finite-Size Scaling analysis
 N_values = [2000, 10000, 50000, 100000, 500000]
-# Specify which N should be used for the time series plots (usually the largest)
 N_time_series = N_values[-1]
-k_avg = 10   # Average degree <k> = 10
+k_avg = 10
 mu_value = 0.2
 beta_values = np.linspace(0.002, 0.05, 50)
 steps = 1000
-transient = 250
 initial_fraction = 0.1
 
-# Number of betas for the rho vs time plot
+# Interactive prompt for the transient time to avoid hardcoding
+print("\n[?] Simulation Settings:")
+transient_input = input("  Enter the transient time to discard (press Enter for default 250): ").strip()
+
+# If the user inputs a valid positive number, use it. Otherwise, fallback to default.
+if transient_input.isdigit():
+    transient = int(transient_input)
+    print(f"  -> Transient time manually set to: {transient}")
+else:
+    transient = 250
+    print(f"  -> Using default transient time: {transient}")
+
+# Ask the user if the transient line should be drawn in the time evolution plots
+plot_trans_input = (input("  Do you want to plot the transient line in the time evolution graphs? (y/n, default y): ")
+                    .strip().lower())
+plot_transient_line = False if plot_trans_input == 'n' else True
+print(f"  -> Plot transient line: {plot_transient_line}")
+
 num_time_series_plots = 10
 ts_indexes = np.linspace(0, len(beta_values) - 1, num_time_series_plots, dtype=int)
-
-# Number of independent simulations to average per beta
 num_seeds = 6
 seed = 42
 
-visual_axis = ""
-for i in range(len(beta_values)):
-    if i in ts_indexes:
-        visual_axis += "█"
-    else:
-        visual_axis += "-"
-
-print(f"[INFO] Initializing parameters: Ns={N_values}, <k>={k_avg}, steps={steps}, transient={transient}")
-print(f"[INFO] Initial infected fraction: {initial_fraction*100}%")
-print(f"[INFO] Rates: mu={mu_value}, beta range=({beta_values[0]:.2f} to {beta_values[-1]:.2f}) with "
-      f"{len(beta_values)} points")
-print(f"[INFO] Ensemble averaging over {num_seeds} runs per beta.")
-print(f"[INFO] Tracking time evolution for N={N_time_series} at {num_time_series_plots} evenly distributed betas.")
-print(f"[INFO] Axis: {beta_values[0]:.3f} [{visual_axis}] {beta_values[-1]:.3f}")
-print("[INFO] Generating the 3 networks (Erdős-Rényi, Watts-Strogatz, Barabási-Albert)...")
+# Dense grid parameters for critical exponents (Log-Log)
+dense_tolerance = 0.01
+dense_points = 50
 
 network_names = ["Erdős-Rényi", "Watts-Strogatz", "Barabási-Albert"]
 
-# Dicts for the results (Nested dictionaries: results_rho[network_name][N])
+# Universal MFA
+beta_c_mfa = mu_value / k_avg
+
+# Data Structures
 results_rho = {name: {N: [] for N in N_values} for name in network_names}
 results_rho_err = {name: {N: [] for N in N_values} for name in network_names}
 results_chi = {name: {N: [] for N in N_values} for name in network_names}
 results_chi_err = {name: {N: [] for N in N_values} for name in network_names}
-
-# Theoretical beta values storage for two approximation
-# 1. Mean-Field Approximation (MFA): Assumes a homogeneous network
-beta_c_mfa = mu_value / k_avg
-# 2. Degree-Based Mean-Field (DBMF): Accounts for degree heterogeneity
 beta_c_dbmf_dict = {name: {} for name in network_names}
-
-# Dict to cache the full time series for rho vs time plot (only for N_time_series)
 saved_time_series = {name: {} for name in network_names}
-
-# The simulator class
-simulator = SISSimulator()
-
-print("[INFO] Starting simulation loops...")
-
-for N in N_values:
-    print("\n" + "=" * 60)
-    print(f"[>>>] SIMULATING FOR SYSTEM SIZE N={N}")
-    print("=" * 60)
-
-    # Generate the networks for the current N
-    print("       [~] Generating Erdős-Rényi graph (this may take a moment for large N)...")
-    er_graph = nx.erdos_renyi_graph(N, k_avg / N)
-
-    print("       [~] Generating Watts-Strogatz graph...")
-    ws_graph = nx.watts_strogatz_graph(N, k_avg, 0.1)
-
-    print("       [~] Generating Barabási-Albert graph...")
-    ba_graph = nx.barabasi_albert_graph(N, k_avg // 2)
-
-    networks = {
-        "Erdős-Rényi": er_graph,
-        "Watts-Strogatz": ws_graph,
-        "Barabási-Albert": ba_graph
-    }
-
-    beta_c_dbmf = {net_name: calc_dbmf(G, mu_value) for net_name, G in networks.items()}
-
-    for name, G in networks.items():
-        print(f"\n       [!] Simulating network: {name}...")
-
-        # Calculate and store the Degree-Based Mean-Field (DBMF) critical beta for this N
-        beta_c_dbmf_dict[name][N] = calc_dbmf(G, mu_value)
-
-        # Get the adjacency matrix
-        matrix_adj = nx.adjacency_matrix(G)
-
-        if use_parallel:
-            # Parallel execution
-            results = Parallel(n_jobs=n_cores)(
-                delayed(run_single_beta)(
-                    b, matrix_adj, mu_value, steps, transient, initial_fraction,
-                    num_seeds, seed, N, (N == N_time_series and b_idx in ts_indexes)
-                )
-                for b_idx, b in enumerate(beta_values)
-            )
-        else:
-            # Sequential execution (with progress printouts)
-            results = []
-            for b_idx, b in enumerate(beta_values):
-                print(f"       --> Running beta={b:.4f} (Averaging {num_seeds} runs)...", end="\r", flush=True)
-
-                res = run_single_beta(
-                    b, matrix_adj, mu_value, steps, transient, initial_fraction,
-                    num_seeds, seed, N, (N == N_time_series and b_idx in ts_indexes)
-                )
-                results.append(res)
-
-        # Process the results is the same for both methods
-        for b_idx, (r_mean, r_std, c_mean, c_std, hist) in enumerate(results):
-            results_rho[name][N].append(r_mean)
-            results_rho_err[name][N].append(r_std)
-            results_chi[name][N].append(c_mean)
-            results_chi_err[name][N].append(c_std)
-
-            if hist is not None:
-                saved_time_series[name][beta_values[b_idx]] = hist
-
-
-        print(f"       [+] Finished beta sweep for {name} (N={N}). Theoretical beta_c (DBMF): "
-              f"{beta_c_dbmf_dict[name][N]:.4f}")
-
-        # Save raw data for this network and this N
-        data_to_save = np.column_stack((beta_values, results_rho[name][N], results_rho_err[name][N],
-                                        results_chi[name][N], results_chi_err[name][N]))
-        safe_name = (name.replace("ő", "o").replace("é", "e").replace("á", "a")
-                     .replace("-", "_"))
-        dat_filepath = os.path.join(output_dir, f"{safe_name}_N{N}_results.dat")
-        np.savetxt(dat_filepath, data_to_save, header="beta rho_mean rho_std susceptibility chi_std", fmt="%.6f")
-
-print("\n[INFO] All simulations completed successfully.")
-print("[INFO] Generating and saving plots...")
-
-# To store the critical beta for the log-log plots: beta_c_dict[network_name][N]
 beta_c_dict = {name: {} for name in network_names}
+dense_results_rho = {name: {N: [] for N in N_values} for name in network_names}
+dense_results_betas = {name: {N: [] for N in N_values} for name in network_names}
+
+
+def get_safe_name(raw_name: str) -> str:
+    """
+    Sanitize network name for file saving.
+
+    :param raw_name: str, original network name
+    :return: str, sanitized name
+    """
+    return (raw_name.replace("ő", "o").replace("é", "e").replace("á", "a")
+            .replace("-", "_"))
+
+
+# =========================================================================
+# 3. DATA GENERATION / LOADING
+# =========================================================================
+
+# --- PRE-LOAD DICTIONARIES IF NOT GENERATING MAIN DATA ---
+# We need the calculated beta_c and DBMF to process the dense grid or plots
+if not generate_main:
+    print("[INFO] Loading main dictionaries from cache...")
+    with open(os.path.join(data_dir, "beta_c_dict.json"), "r") as f:
+        loaded_bc = json.load(f)
+    with open(os.path.join(data_dir, "beta_c_dbmf.json"), "r") as f:
+        loaded_dbmf = json.load(f)
+
+    for name in network_names:
+        safe_name = get_safe_name(name)
+        beta_c_dict[name] = {int(k): float(v) for k, v in loaded_bc[safe_name].items()}
+        beta_c_dbmf_dict[name] = {int(k): float(v) for k, v in loaded_dbmf[safe_name].items()}
+
+# --- EXECUTE SIMULATIONS OR LOAD PARTIAL DATA ---
+if generate_main or generate_dense:
+    print(f"[INFO] Initializing parameters: Ns={N_values}, <k>={k_avg}, steps={steps}")
+    print("[INFO] Starting simulation loops...")
+
+    for N in N_values:
+        print("\n" + "=" * 60)
+        print(f"[>>>] PROCESSING SYSTEM SIZE N={N}")
+        print("=" * 60)
+
+        # Generate the networks dynamically to save RAM (overwritten each N)
+        er_graph = nx.erdos_renyi_graph(N, k_avg / N)
+        ws_graph = nx.watts_strogatz_graph(N, k_avg, 0.1)
+        ba_graph = nx.barabasi_albert_graph(N, k_avg // 2)
+
+        networks = {"Erdős-Rényi": er_graph, "Watts-Strogatz": ws_graph, "Barabási-Albert": ba_graph}
+
+        for name, G in networks.items():
+            safe_name = get_safe_name(name)
+            print(f"\n       [!] Network: {name}...")
+
+            matrix_adj = nx.adjacency_matrix(G)
+
+            # --- PHASE A: MAIN GRID ---
+            if generate_main:
+                beta_c_dbmf_dict[name][N] = calc_dbmf(G, mu_value)
+
+                results = Parallel(n_jobs=n_cores, backend="threading")(
+                    delayed(run_single_beta)(
+                        b, matrix_adj, mu_value, steps, transient, initial_fraction,
+                        num_seeds, seed, N, (N == N_time_series and b_idx in ts_indexes)
+                    )
+                    for b_idx, b in enumerate(beta_values)
+                )
+
+                for b_idx, (r_mean, r_std, c_mean, c_std, hist) in enumerate(results):
+                    results_rho[name][N].append(r_mean)
+                    results_rho_err[name][N].append(r_std)
+                    results_chi[name][N].append(c_mean)
+                    results_chi_err[name][N].append(c_std)
+
+                    if hist is not None:
+                        saved_time_series[name][beta_values[b_idx]] = hist
+
+                # Calculate empirical beta_c via susceptibility peak
+                max_idx = np.argmax(results_chi[name][N])
+                beta_c_dict[name][N] = beta_values[max_idx]
+                print(f"       [+] beta_c estimated at: {beta_c_dict[name][N]:.4f}")
+
+                main_data = np.column_stack((beta_values, results_rho[name][N], results_rho_err[name][N],
+                                             results_chi[name][N], results_chi_err[name][N]))
+                np.savetxt(os.path.join(data_dir, f"main_{safe_name}_N{N}.dat"), main_data)
+
+                # Save time series if applicable
+                if N == N_time_series:
+                    for b_val, h_array in saved_time_series[name].items():
+                        np.save(os.path.join(data_dir, f"hist_{safe_name}_b{b_val:.4f}.npy"), h_array)
+            else:
+                # If generating dense only, load main data so it's available for plotting
+                main_data = np.loadtxt(os.path.join(data_dir, f"main_{safe_name}_N{N}.dat"))
+                beta_values = main_data[:, 0]
+                results_rho[name][N] = main_data[:, 1].tolist()
+                results_rho_err[name][N] = main_data[:, 2].tolist()
+                results_chi[name][N] = main_data[:, 3].tolist()
+                results_chi_err[name][N] = main_data[:, 4].tolist()
+
+            # --- PHASE B: DENSE GRID ---
+            if generate_dense:
+                print(f"       [~] Running dense grid for exponents ({dense_points} points)...")
+                d_betas, d_rhos = run_dense_grid(
+                    beta_c_dict[name][N], dense_tolerance, dense_points, matrix_adj, mu_value,
+                    steps, transient, initial_fraction, num_seeds, seed, N, n_cores
+                )
+                dense_results_betas[name][N] = d_betas
+                dense_results_rho[name][N] = d_rhos
+
+                dense_data = np.column_stack((d_betas, d_rhos))
+                np.savetxt(os.path.join(data_dir, f"dense_{safe_name}_N{N}.dat"), dense_data)
+            else:
+                # Fallback if somehow requested but not calculated
+                dense_data = np.loadtxt(os.path.join(data_dir, f"dense_{safe_name}_N{N}.dat"))
+                dense_results_betas[name][N] = dense_data[:, 0]
+                dense_results_rho[name][N] = dense_data[:, 1]
+
+    # Save dictionaries to JSON only if main data was freshly generated
+    if generate_main:
+        with open(os.path.join(data_dir, "beta_c_dict.json"), "w") as f:
+            json.dump({get_safe_name(k): v for k, v in beta_c_dict.items()}, f)
+        with open(os.path.join(data_dir, "beta_c_dbmf.json"), "w") as f:
+            json.dump({get_safe_name(k): v for k, v in beta_c_dbmf_dict.items()}, f)
+
+# --- LOAD FULL CACHE (IF GENERATE NOTHING) ---
+if not generate_main and not generate_dense:
+    print("[INFO] Loading all data arrays from cache...")
+    for name in network_names:
+        safe_name = get_safe_name(name)
+        for N in N_values:
+            main_data = np.loadtxt(os.path.join(data_dir, f"main_{safe_name}_N{N}.dat"))
+            beta_values = main_data[:, 0]
+            results_rho[name][N] = main_data[:, 1].tolist()
+            results_rho_err[name][N] = main_data[:, 2].tolist()
+            results_chi[name][N] = main_data[:, 3].tolist()
+            results_chi_err[name][N] = main_data[:, 4].tolist()
+
+            dense_data = np.loadtxt(os.path.join(data_dir, f"dense_{safe_name}_N{N}.dat"))
+            dense_results_betas[name][N] = dense_data[:, 0]
+            dense_results_rho[name][N] = dense_data[:, 1]
+
+# --- LOAD TIME SERIES IF MAIN WAS NOT GENERATED ---
+if not generate_main:
+    print("[INFO] Loading time series histories...")
+    for name in network_names:
+        safe_name = get_safe_name(name)
+        for f in os.listdir(data_dir):
+            if f.startswith(f"hist_{safe_name}_b") and f.endswith(".npy"):
+                b_val_str = f.replace(f"hist_{safe_name}_b", "").replace(".npy", "")
+                saved_time_series[name][float(b_val_str)] = np.load(os.path.join(data_dir, f))
+
+# =========================================================================
+# 4. PLOTTING PHASE (PAPER FORMATTED)
+# =========================================================================
+print("\n[INFO] Generating and saving high-quality paper plots...")
+
+# Global font update for two-column paper formatting and APS tick style
+plt.rcParams.update({
+    'font.size': 18,           # Tamaño base general
+    'axes.labelsize': 20,      # Texto de los ejes (ej. "Tasa de infección...")
+    'xtick.labelsize': 16,     # Los numeritos del eje X
+    'ytick.labelsize': 16,     # Los numeritos del eje Y
+    'legend.fontsize': 14,     # Texto de la caja de leyenda
+    'lines.linewidth': 2.5,    # Grosor de las líneas (ajustes y series)
+    'lines.markersize': 8,     # Tamaño de los puntos/triángulos/cuadrados
+    # APS Style Ticks global configuration
+    'xtick.direction': 'in',   # Ticks hacia adentro
+    'ytick.direction': 'in',   # Ticks hacia adentro
+    'xtick.top': True,         # Ticks replicados en el marco superior
+    'ytick.right': True        # Ticks replicados en el marco derecho
+})
 
 for name in network_names:
-    safe_name = (name.replace("ő", "o").replace("é", "e").replace("á", "a")
-                 .replace("-", "_"))
+    safe_name = get_safe_name(name)
 
     # ---------------------------------------------------------
-    # Plot 1: Prevalence (Phase Transition) for multiple N
+    # Plot 1: Prevalence (Phase Transition) & Barabási Zoom
     # ---------------------------------------------------------
-    plt.figure(figsize=(10, 6))
+    fig, ax = plt.subplots(figsize=(10, 6))
     for N in N_values:
-        plt.errorbar(beta_values, results_rho[name][N], yerr=results_rho_err[name][N],
-                     marker='o', markersize=4, capsize=3, label=f'Data N={N}')
+        ax.errorbar(beta_values, results_rho[name][N], yerr=results_rho_err[name][N],
+                    marker='o', capsize=3, label=rf'$N={N}$')
 
-    # Add Theoretical Values for this specific network (using the largest N for DBMF reference)
-    plt.axvline(x=beta_c_mfa, color='black', linestyle=':', label='MFA (Homogeneous)')
-    plt.axvline(x=beta_c_dbmf_dict[name][N_time_series], color='gray', linestyle='-.', label=f'DBMF ({name})')
+    ax.axvline(x=beta_c_mfa, color='black', linestyle=':', label='MFA')
+    ax.axvline(x=beta_c_dbmf_dict[name][N_time_series], color='gray', linestyle='-.', label='DBMF')
 
-    plt.xlabel(r'Infection rate $\beta$')
-    plt.ylabel(r'Stationary infected fraction $\langle \rho \rangle$')
-    plt.title(f'SIS Phase Transition - {name}')
-    # Place legend outside the plot to avoid overlapping
-    plt.legend(bbox_to_anchor=(1.04, 1), loc="upper left")
-    plt.grid(True, alpha=0.3)
-    plt.savefig(os.path.join(output_dir, f"1_{safe_name}_phase_transition.png"), dpi=300, bbox_inches='tight')
-    plt.close()
+    ax.set_xlabel(r'Tasa de infección, $\beta$')
+    ax.set_ylabel(r'Densidad estacionaria, $\langle \rho \rangle$')
+    # ax.set_title(f'Transición de fase SIS - {name}')
+    ax.legend(loc="best", framealpha=0.8)
+    ax.grid(True, alpha=0.3)
+    fig.savefig(os.path.join(plots_dir, f"1_{safe_name}_phase_transition.png"), dpi=300, bbox_inches='tight')
+
+    # Special handling for Barabási-Albert to show the origin collapse
+    if name == "Barabási-Albert":
+        # 1B: Standard with Inset Zoom
+        axins = ax.inset_axes([0.55, 0.08, 0.42, 0.40])  # x0, y0, width, height
+        for N in N_values:
+            axins.errorbar(beta_values, results_rho[name][N], marker='o', markersize=2, linewidth=1.5, capsize=2)
+        axins.axvline(x=beta_c_mfa, color='black', linestyle=':')
+        axins.axvline(x=beta_c_dbmf_dict[name][N_time_series], color='gray', linestyle='-.')
+        axins.set_xlim(0.00, 0.015)
+        axins.set_ylim(-0.01, 0.15)
+        axins.locator_params(axis='both', nbins=4)
+        axins.tick_params(labelsize=12, pad=4)
+        axins.grid(True, alpha=0.3)
+        ax.indicate_inset_zoom(axins, edgecolor="black")
+        ax.legend(loc="upper left", framealpha=0.9)
+        fig.savefig(os.path.join(plots_dir, f"1_{safe_name}_phase_transition_WITH_INSET.png"),
+                    dpi=300, bbox_inches='tight')
+        plt.close(fig)
+
+        # 1C: Standalone Zoom Figure
+        fig_z, ax_z = plt.subplots(figsize=(8, 5))
+        for N in N_values:
+            ax_z.errorbar(beta_values, results_rho[name][N], marker='o', capsize=3, label=rf'$N={N}$')
+        ax_z.axvline(x=beta_c_mfa, color='black', linestyle=':', label='MFA')
+        ax_z.axvline(x=beta_c_dbmf_dict[name][N_time_series], color='gray', linestyle='-.', label='DBMF')
+        ax_z.set_xlim(0.00, 0.015)
+        ax_z.set_ylim(-0.01, 0.25)
+        ax_z.set_xlabel(r'Tasa de infección, $\beta$')
+        ax_z.set_ylabel(r'Densidad estacionaria, $\langle \rho \rangle$')
+        # ax_z.set_title(f'Zoom colapso en el origen - {name}')
+        ax_z.legend(loc="upper left", framealpha=0.8)
+        ax_z.grid(True, alpha=0.3)
+        ax_z.locator_params(axis='both', nbins=5)
+        ax_z.tick_params(axis='both', which='major', pad=8)
+        fig_z.savefig(os.path.join(plots_dir, f"1_{safe_name}_phase_transition_ZOOM_ONLY.png"),
+                      dpi=300, bbox_inches='tight')
+        plt.close(fig_z)
+    else:
+        plt.close(fig)
 
     # ---------------------------------------------------------
-    # Plot 2: Susceptibility (Finding beta_c) for multiple N
+    # Plot 2: Susceptibility (Finding beta_c)
     # ---------------------------------------------------------
     plt.figure(figsize=(10, 6))
-
     for N in N_values:
         plt.errorbar(beta_values, results_chi[name][N], yerr=results_chi_err[name][N],
-                     marker='s', markersize=4, capsize=3, label=f'Data N={N}')
+                     marker='s', capsize=3, label=rf'$N={N}$')
+    plt.axvline(x=beta_c_mfa, color='black', linestyle=':', label='MFA')
+    plt.axvline(x=beta_c_dbmf_dict[name][N_time_series], color='gray', linestyle='-.', label='DBMF')
 
-        # Find the index of the maximum susceptibility
-        max_idx = np.argmax(results_chi[name][N])
-        beta_c_dict[name][N] = beta_values[max_idx]
-        print(f"[INFO] Estimated beta_c for {name} (N={N}): {beta_c_dict[name][N]:.4f}")
-
-    # Add Theoretical Values for this specific network
-    plt.axvline(x=beta_c_mfa, color='black', linestyle=':', label='MFA (Homogeneous)')
-    plt.axvline(x=beta_c_dbmf_dict[name][N_time_series], color='gray', linestyle='-.', label=f'DBMF ({name})')
-
-    plt.xlabel(r'Infection rate $\beta$')
-    plt.ylabel(r'Susceptibility $\chi$')
-    plt.title(f'Finite-Size Scaling (Susceptibility) - {name}')
-    plt.legend(bbox_to_anchor=(1.04, 1), loc="upper left")  # ncol=2 for a cleaner look with many Ns
+    plt.xlabel(r'Tasa de infección, $\beta$')
+    plt.ylabel(r'Susceptibilidad, $\chi$')
+    # plt.title(f'Escalamiento de tamaño finito (Susceptibilidad) - {name}')
+    plt.legend(loc="best", framealpha=0.8)
     plt.grid(True, alpha=0.3)
-    plt.savefig(os.path.join(output_dir, f"2_{safe_name}_susceptibility.png"), dpi=300, bbox_inches='tight')
+    plt.savefig(os.path.join(plots_dir, f"2_{safe_name}_susceptibility.png"), dpi=300, bbox_inches='tight')
     plt.close()
 
     # ---------------------------------------------------------
-    # Plot 3: Critical Exponent (Log-Log) for multiple N
+    # Plot 3: Critical Exponent (Log-Log) with Dense Grid Data
     # ---------------------------------------------------------
-    plt.figure(figsize=(10, 6))
+    fig_log, ax_log = plt.subplots(figsize=(10, 6))
 
-    for N in N_values:
+    # Phase 3A: Plot only largest sizes first
+    largest_Ns = N_values[-2:]
+    for N in largest_Ns:
         beta_c = beta_c_dict[name][N]
-        valid_indices = beta_values > beta_c
+        x_data = dense_results_betas[name][N] - beta_c
+        y_data = dense_results_rho[name][N]
 
-        x_data = beta_values[valid_indices] - beta_c
-        y_data = np.array(results_rho[name][N])[valid_indices]
-
-        # Ensure strict positivity
-        pos_indices = y_data > 0
-        x_data = x_data[pos_indices]
-        y_data = y_data[pos_indices]
+        # Ensure strict positivity for logs
+        valid_idx = (y_data > 0) & (x_data < 1e-2)
+        x_data = x_data[valid_idx][1:]
+        y_data = y_data[valid_idx][1:]
 
         if len(x_data) > 1:
-            line = plt.loglog(x_data, y_data, marker='^', linestyle='', label=f'N={N} data')[0]
-            color_line = line.get_color()
-
-            log_x = np.log(x_data)
-            log_y = np.log(y_data)
-            slope, intercept, r_value, p_value, std_err = stats.linregress(log_x, log_y)
-
+            line = ax_log.loglog(x_data, y_data, marker='^', linestyle='', label=rf'$N={N}$')[0]
+            slope, intercept, _, _, _ = stats.linregress(np.log(x_data), np.log(y_data))
             fit_y = np.exp(intercept) * (x_data ** slope)
-            plt.loglog(x_data, fit_y, linestyle='-', color=color_line, label=f'N={N} fit (exp: {slope:.2f})')
+            ax_log.loglog(x_data, fit_y, linestyle='-', color=line.get_color(),
+                          label=rf'Ajuste $\alpha={slope:.2f}$')
 
-    plt.xlabel(r'$(\beta - \beta_c)$')
-    plt.ylabel(r'$\langle \rho \rangle$')
-    plt.title(f'Critical Scaling - {name}')
-    plt.legend(bbox_to_anchor=(1.04, 1), loc="upper left")
-    plt.grid(True, which="both", ls="--", alpha=0.3)
-    plt.savefig(os.path.join(output_dir, f"3_{safe_name}_critical_scaling.png"), dpi=300, bbox_inches='tight')
-    plt.close()
+    ax_log.set_xlabel(r'$\beta - \beta_c$')
+    ax_log.set_ylabel(r'$\langle \rho \rangle$')
+    # ax_log.set_title(f'Escalamiento crítico (N grandes) - {name}')
+
+    handles, labels = ax_log.get_legend_handles_labels()
+    h_data = [h for h, l in zip(handles, labels) if 'Ajuste' not in l]
+    l_data = [l for l in labels if 'Ajuste' not in l]
+    h_fit = [h for h, l in zip(handles, labels) if 'Ajuste' in l]
+    l_fit = [l for l in labels if 'Ajuste' in l]
+    ax_log.legend(h_data + h_fit, l_data + l_fit, loc="best", framealpha=0.8)
+
+    ax_log.grid(True, which="both", ls="--", alpha=0.3)
+    fig_log.savefig(os.path.join(plots_dir, f"3_{safe_name}_critical_scaling_LARGE_N.png"),
+                    dpi=300, bbox_inches='tight')
+
+    # Phase 3B: Add the rest of the sizes to the same figure
+    other_Ns = [N for N in N_values if N not in largest_Ns]
+    for N in other_Ns:
+        beta_c = beta_c_dict[name][N]
+        x_data = dense_results_betas[name][N] - beta_c
+        y_data = dense_results_rho[name][N]
+
+        valid_idx = (y_data > 0) & (x_data < 1e-2)
+        x_data = x_data[valid_idx][1:]
+        y_data = y_data[valid_idx][1:]
+
+        if len(x_data) > 1:
+            line = ax_log.loglog(x_data, y_data, marker='^', linestyle='', label=rf'$N={N}$')[0]
+            slope, intercept, _, _, _ = stats.linregress(np.log(x_data), np.log(y_data))
+            fit_y = np.exp(intercept) * (x_data ** slope)
+            ax_log.loglog(x_data, fit_y, linestyle='-', color=line.get_color(),
+                          label=rf'Ajuste $\alpha={slope:.2f}$')
+
+    # ax_log.set_title(f'Escalamiento crítico (Todos los tamaños) - {name}')
+
+    handles, labels = ax_log.get_legend_handles_labels()
+    h_data = [h for h, l in zip(handles, labels) if 'Ajuste' not in l]
+    l_data = [l for l in labels if 'Ajuste' not in l]
+    h_fit = [h for h, l in zip(handles, labels) if 'Ajuste' in l]
+    l_fit = [l for l in labels if 'Ajuste' in l]
+    ax_log.legend(h_data + h_fit, l_data + l_fit, loc="best", framealpha=0.8, fontsize=10)
+
+    fig_log.savefig(os.path.join(plots_dir, f"3_{safe_name}_critical_scaling_ALL.png"), dpi=300, bbox_inches='tight')
+    plt.close(fig_log)
 
 # ---------------------------------------------------------
-# Plot 4: Time Evolution of Infected Fraction (Cached)
+# Plot 4: Time Evolution of Infected Fraction
 # ---------------------------------------------------------
-print("[INFO] Generating Plot 4: Time Evolution from cached data...")
+print("[INFO] Generating Plot 4: Time Evolution (Individual and Stacked)...")
 
+# --- 4A: Individual Plots per Network ---
 for name in network_names:
-    safe_name = (name.replace("ő", "o").replace("é", "e").replace("á", "a")
-                 .replace("-", "_"))
+    safe_name = get_safe_name(name)
     cached_data = saved_time_series[name]
-
-    if not cached_data:
-        continue
+    if not cached_data: continue
 
     plt.figure(figsize=(10, 6))
+
+    # Use 'viridis' so that low infection is dark/cold and high infection is bright/hot
     cmap = plt.get_cmap('viridis')
-    colors = cmap(np.linspace(0, 0.9, len(cached_data)))
+    sorted_betas = sorted(cached_data.keys())
 
-    for (b, history), color in zip(cached_data.items(), colors):
-        plt.plot(range(len(history)), history, label=rf'$\beta={b:.4f}$', color=color, alpha=0.8)
+    # Setup normalization and ScalarMappable for the colorbar
+    norm = plt.Normalize(vmin=min(sorted_betas), vmax=max(sorted_betas))
+    sm = plt.cm.ScalarMappable(cmap=cmap, norm=norm)
+    sm.set_array([])
 
-    plt.axvline(x=transient, color='red', linestyle='--', alpha=0.7, label=f'End of Transient ({transient})')
+    for b in sorted_betas:
+        history = cached_data[b]
+        color = cmap(norm(b))
+        plt.plot(range(len(history)), history, color=color, alpha=0.8)
 
-    plt.xlabel('Time steps ($t$)')
-    plt.ylabel(r'Infected fraction ($\rho$)')
-    plt.title(f'Time Evolution (N={N_time_series}) - {name}')
-    plt.legend(loc='center right')
+    # Conditionally plot the transient line and its legend
+    if plot_transient_line:
+        plt.axvline(x=transient, color='red', linestyle='--', alpha=0.7, label='Fin del transitorio')
+        plt.legend(loc="best", framealpha=0.8, fontsize=11)
+
+    plt.xlabel(r'Tiempo, $t$')
+    plt.ylabel(r'Densidad de infectados, $\rho(t)$')
+    # plt.title(f'Evolución temporal ($N={N_time_series}$) - {name}')
+
+    # Add colorbar
+    cbar = plt.colorbar(sm, ax=plt.gca())
+    cbar.set_label(r'Tasa de infección, $\beta$')
+
     plt.grid(True, alpha=0.3)
-    plt.savefig(os.path.join(output_dir, f"4_{safe_name}_time_evolution.png"), dpi=300, bbox_inches='tight')
+    plt.savefig(os.path.join(plots_dir, f"4_{safe_name}_time_evolution.png"), dpi=300, bbox_inches='tight')
+    plt.close()
+
+# --- 4B: Stacked Multipanel Plot ---
+# Check if at least one network has data to prevent empty plots
+has_data = any(bool(saved_time_series[n]) for n in network_names)
+
+if has_data:
+    # Create a figure with 3 subplots sharing the X axis
+    fig, axes = plt.subplots(3, 1, figsize=(8, 10), sharex=True)
+    fig.subplots_adjust(hspace=0.08)  # Reduce vertical space between plots
+
+    cmap = plt.get_cmap('viridis')
+
+    # Get min and max beta across all networks for a unified colorbar
+    all_betas = []
+    for name in network_names:
+        all_betas.extend(saved_time_series[name].keys())
+
+    norm = plt.Normalize(vmin=min(all_betas), vmax=max(all_betas))
+    sm = plt.cm.ScalarMappable(cmap=cmap, norm=norm)
+    sm.set_array([])
+
+    # Panel identifiers for paper reference
+    panel_letters = ['(a)', '(b)', '(c)']
+
+    for idx, name in enumerate(network_names):
+        ax = axes[idx]
+        cached_data = saved_time_series[name]
+
+        if not cached_data:
+            continue
+
+        sorted_betas = sorted(cached_data.keys())
+        for b in sorted_betas:
+            history = cached_data[b]
+            color = cmap(norm(b))
+            ax.plot(range(len(history)), history, color=color, alpha=0.8)
+
+        # Conditionally plot the transient line and legend
+        if plot_transient_line:
+            ax.axvline(x=transient, color='red', linestyle='--', alpha=0.7, label='Fin del transitorio')
+            # Legend only on the first panel
+            if idx == 0:
+                ax.legend(loc="lower right", framealpha=0.9, fontsize=11)
+
+        ax.grid(True, alpha=0.3)
+        ax.locator_params(axis='y', nbins=4)  # Prevent Y-axis ticks from overlapping
+
+        # Professional panel identifier and network name (No bounding box, clean text)
+        ax.text(0.02, 0.90, f"{panel_letters[idx]} {name}", transform=ax.transAxes, fontsize=16,
+                verticalalignment='top', fontweight='bold')
+
+    # Single global Y-axis label for the entire stacked figure
+    fig.supylabel(r'Densidad de infectados, $\rho(t)$', fontsize=20)
+
+    # X-axis label only on the bottom plot
+    axes[-1].set_xlabel(r'Tiempo, $t$')
+
+    # Add a single global colorbar for all subplots combined
+    cbar = fig.colorbar(sm, ax=axes, pad=0.02, aspect=40)
+    cbar.set_label(r'Tasa de infección, $\beta$')
+
+    # Save the stacked multipanel plot
+    plt.savefig(os.path.join(plots_dir, f"4_time_evolution_STACKED_N{N_time_series}.png"), dpi=300,
+                bbox_inches='tight')
     plt.close()
 
 # =========================================================================
@@ -368,153 +657,112 @@ comparison_color_map = {
     "Watts-Strogatz": "green",
     "Barabási-Albert": "red"
 }
+sorted_names_for_legend = ["Erdős-Rényi", "Watts-Strogatz", "Barabási-Albert"]
 
 # ---------------------------------------------------------
 # Plot 5: Comparison Prevalence (Phase Transition)
 # ---------------------------------------------------------
 plt.figure(figsize=(10, 6))
-
-# Define a custom sorting order for the network types in legend
-sorted_names_for_legend = ["Erdős-Rényi", "Watts-Strogatz", "Barabási-Albert"]
-
-# Plot lines and store handles for sorting legend later
 plot_handles = {}
 
 for name in sorted_names_for_legend:
-    if name not in networks: continue  # Safety check
-
-    # Extract color from semantic map
+    if name not in results_rho: continue
     net_color = comparison_color_map.get(name, "black")
 
-    # Explicitly use [N_time_series] data
     line = plt.errorbar(beta_values, results_rho[name][N_time_series],
                         yerr=results_rho_err[name][N_time_series],
-                        marker='o', markersize=4, color=net_color, capsize=3,
-                        label=f'Data: {name}')[0]
-
-    # Store handle using a tuple key (Network Name, 'data')
+                        marker='o', color=net_color, capsize=3, label=f'{name}')
     plot_handles[(name, 'data')] = line
 
-    # Add corresponding DBMF for this network with same color but different style
     dbmf_line = plt.axvline(x=beta_c_dbmf_dict[name][N_time_series],
-                            color=net_color, linestyle='-.', alpha=0.7,
-                            label=f'DBMF: {name}')
-
-    # Store handle
+                            color=net_color, linestyle='-.', alpha=0.7, label=f'DBMF ({name})')
     plot_handles[(name, 'dbmf')] = dbmf_line
 
-# Add the universal MFA line (stays black)
-mfa_line = plt.axvline(x=beta_c_mfa, color='black', linestyle=':', label='MFA (Homogeneous)')
+mfa_line = plt.axvline(x=beta_c_mfa, color='black', linestyle=':', label='MFA')
 
-# Combine handles for legend sorting
 all_handles = [plot_handles[(n, 'data')] for n in sorted_names_for_legend if (n, 'data') in plot_handles] + \
-              [plot_handles[(n, 'dbmf')] for n in sorted_names_for_legend if (n, 'dbmf') in plot_handles] + \
-              [mfa_line]
+              [plot_handles[(n, 'dbmf')] for n in sorted_names_for_legend if (n, 'dbmf') in plot_handles] + [mfa_line]
 
-plt.xlabel(r'Infection rate $\beta$')
-plt.ylabel(r'Stationary infected fraction $\langle \rho \rangle$')
-plt.title(f'SIS Epidemic Phase Transition Comparison (N={N_time_series})')
-
-# Create sorted legend placed outside
-plt.legend(handles=all_handles, bbox_to_anchor=(1.04, 1), loc="upper left")
+plt.xlabel(r'Tasa de infección, $\beta$')
+plt.ylabel(r'Densidad estacionaria, $\langle \rho \rangle$')
+# plt.title(f'Comparativa de transición de fase epidémica ($N={N_time_series}$)')
+plt.legend(handles=all_handles, loc="best", framealpha=0.8)
 plt.grid(True, alpha=0.3)
-plt_path_5 = os.path.join(output_dir, f"5_comparison_phase_transition_N{N_time_series}.png")
-plt.savefig(plt_path_5, dpi=300, bbox_inches='tight')
+plt.savefig(os.path.join(plots_dir, f"5_comparison_phase_transition_N{N_time_series}.png"),
+            dpi=300, bbox_inches='tight')
 plt.close()
 
 # ---------------------------------------------------------
-# Plot 6: Comparison Susceptibility (Finding beta_c)
+# Plot 6: Comparison Susceptibility
 # ---------------------------------------------------------
 plt.figure(figsize=(10, 6))
-beta_c_comp_dict = {}
-
-# Reset plot handles for this specific graph
 plot_handles = {}
 
 for name in sorted_names_for_legend:
-    if name not in networks: continue # Safety check
-
+    if name not in results_chi: continue
     net_color = comparison_color_map.get(name, "black")
 
-    # Plot empirical data
     line = plt.errorbar(beta_values, results_chi[name][N_time_series],
                         yerr=results_chi_err[name][N_time_series],
-                        marker='s', markersize=4, color=net_color, capsize=3,
-                        label=f'Data: {name}')[0]
+                        marker='s', color=net_color, capsize=3, label=f'{name}')
     plot_handles[(name, 'data')] = line
 
-    # Find the empirical peak for Plot 7
-    max_idx = np.argmax(results_chi[name][N_time_series])
-    beta_c_comp_dict[name] = beta_values[max_idx]
-
-    # Add theoretical DBMF
     dbmf_line = plt.axvline(x=beta_c_dbmf_dict[name][N_time_series],
-                            color=net_color, linestyle='-.', alpha=0.7,
-                            label=f'DBMF: {name}')
+                            color=net_color, linestyle='-.', alpha=0.7, label=f'DBMF ({name})')
     plot_handles[(name, 'dbmf')] = dbmf_line
 
-# Add universal MFA
-mfa_line = plt.axvline(x=beta_c_mfa, color='black', linestyle=':', label='MFA (Homogeneous)')
+mfa_line = plt.axvline(x=beta_c_mfa, color='black', linestyle=':', label='MFA')
 
-# Group and sort handles: Data, then Peak, then Theory for each network
-grouped_handles = []
-for n in sorted_names_for_legend:
-    if (n, 'data') in plot_handles: grouped_handles.append(plot_handles[(n, 'data')])
-    if (n, 'dbmf') in plot_handles: grouped_handles.append(plot_handles[(n, 'dbmf')])
-grouped_handles.append(mfa_line)
+all_handles = [plot_handles[(n, 'data')] for n in sorted_names_for_legend if (n, 'data') in plot_handles] + \
+              [plot_handles[(n, 'dbmf')] for n in sorted_names_for_legend if (n, 'dbmf') in plot_handles] + [mfa_line]
 
-plt.xlabel(r'Infection rate $\beta$')
-plt.ylabel(r'Susceptibility $\chi$')
-plt.title(f'Susceptibility Peak Comparison (N={N_time_series})')
-
-# Organized legend
-plt.legend(handles=grouped_handles, bbox_to_anchor=(1.04, 1), loc="upper left")
+plt.xlabel(r'Tasa de infección, $\beta$')
+plt.ylabel(r'Susceptibilidad, $\chi$')
+# plt.title(f'Comparativa de picos de susceptibilidad ($N={N_time_series}$)')
+plt.legend(handles=all_handles, loc="best", framealpha=0.8)
 plt.grid(True, alpha=0.3)
-plt_path_6 = os.path.join(output_dir, f"6_comparison_susceptibility_N{N_time_series}.png")
-plt.savefig(plt_path_6, dpi=300, bbox_inches='tight')
+plt.savefig(os.path.join(plots_dir, f"6_comparison_susceptibility_N{N_time_series}.png"),
+            dpi=300, bbox_inches='tight')
 plt.close()
 
 # ---------------------------------------------------------
-# Plot 7: Comparison Finite-Size Scaling (Log-Log)
+# Plot 7: Comparison Finite-Size Scaling (Log-Log with Dense Grid)
 # ---------------------------------------------------------
 plt.figure(figsize=(10, 6))
 
-for name in network_names:
+for name in sorted_names_for_legend:
     net_color = comparison_color_map.get(name, "black")
-    beta_c = beta_c_comp_dict[name]
+    beta_c = beta_c_dict[name][N_time_series]
 
-    # Filter data: active phase (beta > beta_c)
-    valid_indices = beta_values > beta_c
-    x_data = beta_values[valid_indices] - beta_c
-    y_data = np.array(results_rho[name][N_time_series])[valid_indices]
+    x_data = dense_results_betas[name][N_time_series] - beta_c
+    y_data = dense_results_rho[name][N_time_series]
 
-    # Ensure strict positivity
-    pos_indices = y_data > 0
-    x_data = x_data[pos_indices]
-    y_data = y_data[pos_indices]
+    valid_idx = (y_data > 0) & (x_data < 1e-2)
+    x_data = x_data[valid_idx][1:]
+    y_data = y_data[valid_idx][1:]
 
     if len(x_data) > 1:
-        # Scatter plot in log-log scale with semantic color
-        plt.loglog(x_data, y_data, marker='^', linestyle='',
-                   color=net_color, label=f'Data: {name}')
-
-        # Linear regression and fit line (same color, solid style)
-        log_x = np.log(x_data)
-        log_y = np.log(y_data)
-        slope, intercept, r_value, p_value, std_err = stats.linregress(log_x, log_y)
+        plt.loglog(x_data, y_data, marker='^', linestyle='', color=net_color, label=f'{name}')
+        slope, intercept, _, _, _ = stats.linregress(np.log(x_data), np.log(y_data))
         fit_y = np.exp(intercept) * (x_data ** slope)
-        plt.loglog(x_data, fit_y, linestyle='-', color=net_color,
-                   label=f'Fit {name} (exp: {slope:.2f})')
+        plt.loglog(x_data, fit_y, linestyle='-', color=net_color, label=rf'Ajuste $\alpha={slope:.2f}$')
 
-plt.xlabel(r'$(\beta - \beta_c)$')
+plt.xlabel(r'$\beta - \beta_c$')
 plt.ylabel(r'$\langle \rho \rangle$')
-plt.title(f'Critical Scaling Comparison (N={N_time_series})')
-plt.legend(bbox_to_anchor=(1.04, 1), loc="upper left")
+# plt.title(f'Comparativa de escalamiento crítico ($N={N_time_series}$)')
+
+handles, labels = plt.gca().get_legend_handles_labels()
+h_data = [h for h, l in zip(handles, labels) if 'Ajuste' not in l]
+l_data = [l for l in labels if 'Ajuste' not in l]
+h_fit = [h for h, l in zip(handles, labels) if 'Ajuste' in l]
+l_fit = [l for l in labels if 'Ajuste' in l]
+plt.legend(h_data + h_fit, l_data + l_fit, loc="best", framealpha=0.8)
+
 plt.grid(True, which="both", ls="--", alpha=0.3)
-plt_path_7 = os.path.join(output_dir, f"7_comparison_critical_scaling_N{N_time_series}.png")
-plt.savefig(plt_path_7, dpi=300, bbox_inches='tight')
+plt.savefig(os.path.join(plots_dir, f"7_comparison_critical_scaling_N{N_time_series}.png"),
+            dpi=300, bbox_inches='tight')
 plt.close()
 
 print("\n" + "=" * 60)
-print(f"[SUCCESS] All tasks finished. Check your data at: ./{output_dir}/")
+print(f"[SUCCESS] All tasks finished. Check your data at: ./{plots_dir}/")
 print("=" * 60)
