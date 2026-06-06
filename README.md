@@ -6,6 +6,7 @@
 ![Network Science](https://img.shields.io/badge/Field-Network%20Science-green)
 ![Statistical Physics](https://img.shields.io/badge/Field-Statistical%20Physics-orange)
 ![Complex Systems](https://img.shields.io/badge/Field-Complex%20Systems-purple)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 <p align="center">
   <img src="docs/report/imagenes/BA_phase_trans.png"          width="48%"/>
