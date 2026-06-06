@@ -204,29 +204,41 @@ Figure Generation
 ```text
 SIS-Complex-Networks/
 
+├── docs/
+│   └── report/
+│       ├── imagenes/
+│       │   ├── BA_phase_trans.png
+│       │   ├── bifurcation.png
+│       │   ├── griffiths_finite_size.png
+│       │   ├── time_evolution_stacked_500k.png
+│       │   ├── comparison_phase_trans_500k.png
+│       │   ├── comparison_suscept_500k.png
+│       │   ├── comparison_critical_500k.png
+│       │   ├── spectrum_q_0.30.png
+│       │   ├── spectrum_q_0.90.png
+│       │   ├── spectrum_q_2-3.png
+│       │   └── phase_diagram.png
+│       ├── report.bib
+│       ├── report.pdf
+│       └── report.tex
+│
 ├── src/
 │   ├── scripts/
 │   │   ├── main.py
 │   │   └── main_griffiths.py
 │   │
 │   ├── simulators/
-│   │
-│   ├── models/
-│   │
-│   ├── analysis/
+│   │   ├── sis_simulator.py
+│   │   └── griffiths_simulator.py
 │   │
 │   └── plotting/
 │       ├── plot_summary.py
 │       ├── plot_finite_size.py
-│       └── plot_*.py
+│       ├── plot_phase.py
+│       └── plot_bifurcation.py
 │
-├── results/
-│   ├── data/
-│   └── figures/
-│
-├── docs/
-│   └── report/
-│
+├── .gitignore
+├── README.md
 └── requirements.txt
 ```
 
