@@ -7,6 +7,14 @@
 ![Statistical Physics](https://img.shields.io/badge/Field-Statistical%20Physics-orange)
 ![Complex Systems](https://img.shields.io/badge/Field-Complex%20Systems-purple)
 
+<p align="center">
+  <img src="docs/report/imagenes/BA_phase_trans.png"          width="48%"/>
+  <img src="docs/report/imagenes/comparison_critical_500k.png" width="48%"/>
+  <br>
+  <img src="docs/report/imagenes/spectrum_q_0.90.png"          width="48%"/>
+  <img src="docs/report/imagenes/griffiths_finite_size.png"    width="48%"/>
+</p>
+
 ---
 
 ## Overview
@@ -298,6 +306,46 @@ These scripts allow rapid experimentation with visualizations without repeating 
 
 ---
 
+## Analytical Diagrams
+
+Two standalone plotting scripts generate publication-ready analytical figures directly from theory, without requiring any simulation data.
+
+### Transcritical Bifurcation Diagram
+
+```bash
+python src/plotting/plot_bifurcation.py
+```
+
+Produces the mean-field transcritical bifurcation diagram for the homogeneous SIS model. The script computes the two stationary branches of the fixed-point equation as a function of the infection rate β:
+
+- **Healthy state** (ρ\* = 0): stable for β < μ, unstable above threshold.
+- **Endemic state** (ρ\* = 1 − μ/β): emerges continuously at β_c = μ and becomes the stable attractor for β > μ.
+
+The bifurcation point is highlighted explicitly, illustrating the exchange of stability that defines the epidemic threshold. The plot is styled following APS journal conventions and is saved as `Bifurcacion_SIS.png`.
+
+![Bifurcation diagram](docs/report/imagenes/bifurcation.png)
+
+---
+
+### Theoretical Phase Diagram
+
+```bash
+python src/plotting/plot_phase.py
+```
+
+Produces the theoretical phase diagram for the disordered SIS model on an Erdős–Rényi network, mapping the full parameter space spanned by the active node fraction (1 − q) and the infection rate β. Four distinct dynamical regimes are identified and colour-coded:
+
+- **Active phase**: the epidemic sustains itself indefinitely above the critical line β_c(q).
+- **Griffiths phase**: algebraic density decay driven by rare-region effects, present in the non-percolating regime above β_c(q_perc).
+- **Absorbing phase — stretched exponential**: intermediate regime where the network percolates locally but the epidemic cannot survive globally.
+- **Absorbing phase — pure exponential**: the network is deeply subcritical and the epidemic decays with a simple exponential envelope.
+
+The critical line β_c(q) = μ ⟨k⟩/⟨k²⟩ · 1/(1 − q) is derived from the Degree-Based Mean-Field approximation. The percolation threshold and the multicritical point are marked explicitly. The script supports five output modes (`full`, `colors_only`, `legend_text_only`, `legend_formulas_only`, `no_legend_no_params`), making it straightforward to adapt the figure for presentations, reports, or publications.
+
+![Phase diagram](docs/report/imagenes/phase_diagram.png)
+
+---
+
 # Main Results
 
 The project produces a variety of scientific visualizations, including:
@@ -310,7 +358,7 @@ The project produces a variety of scientific visualizations, including:
 - Density decay curves.
 - Griffiths phase signatures.
 
-> Example figures can be found in the generated results directories.
+> Example figures can be found in the report's images directory.
 
 ---
 
@@ -363,8 +411,9 @@ Possible extensions include:
 
 Developed for the course:
 
-**Epidemic Models in Complex Networks**
+**Physics of Complex Systems**
 
-Physics Degree — Computational Physics, Statistical Physics and Complex Systems.
+Physics Degree — Departamento de Electromagnetismo y Física de la Materia,
+[Universidad de Granada (UGR)](https://www.ugr.es/)
 
-Author: **Eugenio Etcheverría**
+Author: **Eugenio Etcheverría Sanz**
