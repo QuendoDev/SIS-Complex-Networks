@@ -432,4 +432,4 @@ Developed for the course:
 Physics Degree — Departamento de Electromagnetismo y Física de la Materia,
 [Universidad de Granada (UGR)](https://www.ugr.es/)
 
-Author: **Eugenio Etcheverría Sanz**
+Authors: **Eugenio Etcheverría Sanz** (implementation & analysis) & **Javier Campos Vallejo** (theory & analysis)
