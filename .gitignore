@@ -1,5 +1,6 @@
 # Ignorar la carpeta de resultados completa
 results/
+results_griffiths/
 
 # Ignorar el entorno virtual (muy importante)
 .venv/
