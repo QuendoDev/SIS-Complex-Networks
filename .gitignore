@@ -1,20 +1,45 @@
-# Ignorar la carpeta de resultados completa
-results/
-results_griffiths/
+# ==========================================
+# LaTeX / TeXstudio (Archivos temporales)
+# ==========================================
+*.aux
+*.bbl
+*.bcf
+*.blg
+*.fdb_latexmk
+*.fls
+*.log
+*.out
+*.run.xml
+*.synctex.gz
+*.toc
+*.lot
+*.lof
+*.nav
+*.snm
+*.vrb
+*.dvi
+*Notes.bib
 
-# Ignorar el entorno virtual (muy importante)
+# ==========================================
+# Python y Entornos Virtuales
+# ==========================================
 .venv/
 venv/
 ENV/
-
-# Ignorar configuraciones de PyCharm/IntelliJ
-.idea/
-
-# Ignorar archivos compilados de Python
 __pycache__/
 *.py[cod]
 *$py.class
 
-# Ignorar archivos de sistema
+# ==========================================
+# Datos y Caché de Simulaciones
+# ==========================================
+results/
+results_griffiths/
+
+# ==========================================
+# IDEs y Archivos de Sistema
+# ==========================================
+.idea/
+.vscode/
 .DS_Store
 Thumbs.db
