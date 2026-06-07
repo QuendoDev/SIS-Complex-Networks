@@ -16,7 +16,7 @@ aps,
 \decimalpoint
 
 \begin{document}
-	
+	\renewcommand{\andname}{y}
 	\title{Efectos de la topología en el modelo SIS}
 	
 	\author{Javier Campos Vallejo}
@@ -33,7 +33,7 @@ aps,
 	\maketitle
 	
 	\section{\label{sec:introduccion}Introducción}
-	El estudio de la propagación de epidemias en el marco de la Física de los Sistemas Complejos es crucial para comprender los mecanismos relacionados que determinan la persistencia o la extinción de una enfermedad en una población. Más allá de su evidente interés epidemiológico, estos modelos constituyen buenos ejemplos de sistemas dinámicos estocásticos con transiciones de fase fuera del equilibrio. En particular, permiten explorar la criticidad universal intrínseca de la mecánica estadística, una propiedad fundamental que define el comportamiento del sistema cerca de su punto crítico y que será analizada en detalle en este trabajo.~\cite{PastorSatorras2015,Dorogovtsev2008,Albert2002,Odor2004}
+	El estudio de la propagación de epidemias en el marco de la Física de los Sistemas Complejos es crucial para comprender los mecanismos relacionados que determinan la persistencia o la extinción de una enfermedad en una población. Más allá de su evidente interés epidemiológico, estos modelos constituyen buenos ejemplos de sistemas dinámicos estocásticos con transiciones de fase fuera del equilibrio. En particular, permiten explorar la criticidad universal intrínseca de la mecánica estadística, una propiedad fundamental que define el comportamiento del sistema cerca de su punto crítico y que será analizada en detalle en este trabajo~\cite{PastorSatorras2015,Dorogovtsev2008,Albert2002,Odor2004}.
 	
 	Entre los diversos marcos teóricos disponibles, este trabajo se centra en el modelo \textit{Susceptible-Infectado-Susceptible} (SIS). Este modelo describe dinámicas de contagio en las que los individuos infectados se recuperan a una cierta tasa, pero al hacerlo no adquieren inmunidad, volviendo a ser susceptibles de forma inmediata y pudiendo reiniciar el ciclo de contagios. Resulta especialmente adecuado para modelar infecciones con inmunidad efímera o inexistente, como el resfriado común.~\cite{PastorSatorras2015}
 	
@@ -47,13 +47,13 @@ aps,
 		\item \textbf{Infectados ($I$):} Individuos enfermos que pueden transmitir la enfermedad y que acaban sanando pero que no adquieren inmunidad, permitiendo la reinfección.
 	\end{itemize}
 	
-	Como la población no varía con el tiempo, siempre se cumple que $S + I = N$. El objetivo de este estudio es analizar la evolución temporal de la \textbf{densidad de infectados} ($\rho = I/N$).~\cite{PastorSatorras2015}
+	Como la población no varía con el tiempo, siempre se cumple que $S + I = N$. El objetivo de este estudio es analizar la evolución temporal de la \textbf{densidad de infectados} ($\rho = I/N$)~\cite{PastorSatorras2015}.
 	
 	\subsection{Tasas de Transición}\label{sec:tasas_trans}
-	Para encontrar las ecuaciones dinámicas que gobiernan el sistema, se asume la hipotesis de un \textbf{entorno bien mezclado} (\textit{well-mixed environment}). Esto significa que asumimos que cualquier individuo tiene la misma probabilidad de interactuar con cualquier otro individuo de la población, ignorando la estructura topológica local de la red~\cite{PastorSatorras2015,Albert2002}.
+	Para encontrar las ecuaciones dinámicas que gobiernan el sistema, se asume la hipótesis de un \textbf{entorno bien mezclado} (\textit{well-mixed environment}). Esto significa que asumimos que cualquier individuo tiene la misma probabilidad de interactuar con cualquier otro individuo de la población, ignorando la estructura topológica local de la red~\cite{PastorSatorras2015,Albert2002}.
 	Definimos las tasas de transición macroscópicas $W(I \to I')$ que determinan la evolución del número total de infectados~\cite{Roig2026}:
 	
-	\textbf{Tasa de Infección, $W(I \to I+1)$:} Un individuo susceptible en contacto con uno infectado contrae la enfermedad con una tasa $\beta$. Dado que cada individuo posee en promedio $\langle k \rangle$ contactos en la red, y la probabilidad de que el contacto sea susceptible es $S/N$. Como hay $I$ personas infectadas, la tasa total es:
+	\textbf{Tasa de Infección, $W(I \to I+1)$:} Un individuo susceptible en contacto con uno infectado contrae la enfermedad con una tasa $\beta$. Dado que cada individuo posee en promedio $\langle k \rangle$ contactos en la red, y la probabilidad de que el contacto sea susceptible es $S/N$ y como hay $I$ personas infectadas, la tasa total es:
 	\begin{equation}
 		W(I \to I+1) = \beta \langle k \rangle I \frac{S}{N} = \beta \langle k \rangle I \frac{N - I}{N}
 	\end{equation}
@@ -63,7 +63,7 @@ aps,
 		W(I \to I-1) = \mu I
 	\end{equation}
 	
-	El modelo SIS está gobernado por las transiciones elementales:~\cite{PastorSatorras2015,Roig2026}
+	El modelo SIS está gobernado por las transiciones elementales~\cite{PastorSatorras2015,Roig2026}:
 	\begin{align}
 		S + I &\xrightarrow{\beta} 2I, \\
 		I &\xrightarrow{\mu} S.
@@ -73,12 +73,12 @@ aps,
 	
 	
 	\subsection{Evolución y Estado Estacionario}
-	Partiendo de la tasas de transición macroscópicas, aplicamos la ecuación maestra y la aproximación de campo medio ($\langle I^2 \rangle \approx \langle I \rangle^2$, véase el desarrollo detallado en el Apéndice \ref{apendice:mean_field}), obteniendo que la evolución temporal de la densidad de infectados viene dada por:
+	Partiendo de las tasas de transición macroscópicas, aplicamos la ecuación maestra y la aproximación de campo medio ($\langle I^2 \rangle \approx \langle I \rangle^2$, véase el desarrollo detallado en el Apéndice \ref{apendice:mean_field}), obteniendo que la evolución temporal de la densidad de infectados viene dada por:
 	\begin{equation}
 		\frac{d\rho}{dt} = \beta \langle k \rangle \rho (1 - \rho) - \mu \rho
 	\end{equation}
 	
-	Para encontrar el umbral crítico, se analiza el estado estacionario ($d\rho/dt = 0$), obteniendo dos puntos fijos: el estado libre de enfermedad ($\rho^* = 0$) y el estado endémico ($\rho^* = 1 - \frac{\mu}{\beta \langle k \rangle}$). El intercambio de estabilidad entre ambas soluciones define una bifurcación transcrítica en el sistema (Fig. \ref{fig:bifurcacion}), estableciendo el umbral epidémico clásico:~\cite{PastorSatorras2015}
+	Para encontrar el umbral crítico, se analiza el estado estacionario ($d\rho/dt = 0$), obteniendo dos puntos fijos: el estado libre de enfermedad ($\rho^* = 0$) y el estado endémico ($\rho^* = 1 - \frac{\mu}{\beta \langle k \rangle}$). El intercambio de estabilidad entre ambas soluciones define una bifurcación transcrítica en el sistema (Fig. \ref{fig:bifurcacion}), estableciendo el umbral epidémico clásico~\cite{PastorSatorras2015}:
 	\begin{equation}
 		\lambda_c = \frac{1}{\langle k \rangle}
 	\end{equation}
@@ -163,7 +163,7 @@ aps,
 	\end{equation}
 	\textit{Nota: Por claridad notacional, se empleará el exponente $\alpha$ en lugar del tradicional $\beta$ de la literatura estadística, evitando así confusión con la tasa de infección macroscópica del modelo SIS.}
 	
-	Al representar los datos en escala logarítmica (Fig. \ref{fig:scaling}), el exponente $\alpha$ corresponde a la pendiente de la recta en la región asintótica. Un ajuste mediante mínimos cuadrados sobre los datos arrojan pendientes casi idénticas para las topologías ER ($\alpha \approx 0.91$) y WS ($\alpha \approx 0.97$), ubicándolas dentro de la clase de universalidad de percolación dirigida en campo medio (véase el Apéndice \ref{apendice:percolacion_dirigida}), en la que se trabaja con un exponente estático teórico $\alpha=1$ ~\cite{Odor2004}.
+	Al representar los datos en escala logarítmica (Fig. \ref{fig:scaling}), el exponente $\alpha$ corresponde a la pendiente de la recta en la región asintótica. Un ajuste mediante mínimos cuadrados sobre los datos arroja pendientes casi idénticas para las topologías ER ($\alpha \approx 0.91$) y WS ($\alpha \approx 0.97$), ubicándolas dentro de la clase de universalidad de percolación dirigida en campo medio (véase el Apéndice \ref{apendice:percolacion_dirigida}), en la que se trabaja con un exponente estático teórico $\alpha=1$ ~\cite{Odor2004}.
 	
 	Por el contrario, la red de Barabási-Albert ($\alpha \approx 0.03$) rompe de manera contundente con esta clase de universalidad, manifestando dinámicas anómalas intrínsecas a las redes con varianza de grado divergente ~\cite{PastorSatorras2015}.
 	
@@ -217,7 +217,7 @@ aps,
 	
 	Por el contrario, a la izquierda de la frontera ($q > 2/3$), el colapso topológico suprime por completo la posibilidad de un estado endémico global. En este régimen no percolante, la viabilidad temporal de la infección queda delimitada por dos límites teóricos constantes: el umbral crítico puro $\beta_c(0) = 0.075$, que corresponde a una red homogénea sin desorden ($q=0$), y el límite $\beta_c(q_{\text{perc}}) = 0.225$. En esta frontera, las islas aisladas se vuelven localmente críticas, generando la Fase de Griffiths. A diferencia de las transiciones clásicas, este régimen exhibe un decaimiento algebraico (ley de potencias) con un exponente variable, transformando un único punto crítico en un intervalo de ellos.
 	
-	Los límites de estas fronteras define un punto multicrítico en las coordenadas teóricas $(1/3, 0.225)$. En la región acotada por estos umbrales, la dinámica ya no cambia hacia un único estado absorbente trivial, sino que se ramifica en un espectro continuo de regímenes de relajación anómala gobernados por las regiones raras~\cite{Muñoz2010}.
+	Los límites de estas fronteras definen un punto multicrítico en las coordenadas teóricas $(1/3, 0.225)$. En la región acotada por estos umbrales, la dinámica ya no cambia hacia un único estado absorbente trivial, sino que se ramifica en un espectro continuo de regímenes de relajación anómala gobernados por las regiones raras~\cite{Muñoz2010}.
 	
 	\subsection{Dinámica de Relajación y Regímenes Anómalos}
 	
@@ -246,7 +246,7 @@ aps,
 	
 	Por el contrario, al inducir una fragmentación extrema ($q=0.9 > q_{\text{perc}}$), el estado endémico desaparece y el sistema decae hacia el estado absorbente. En esta región se observa un espectro continuo de regímenes de relajación. Para tasas de infección bajas, el parámetro de orden muestra caídas verticales abruptas en escala logarítmica, correspondientes a decaimientos exponenciales puros y estirados. A medida que se incrementa la tasa de infección, emerge un abanico de rectas con exponente algebraico dependiente del parámetro de control, característica definitoria de la Fase de Griffiths.
 	
-	Al contrastar las predicciones teóricas con los datos empíricos (Fig. \ref{fig:espectro_q09}), se observa una desviación sistemática en los umbrales de transición. Mientras que la aproximación DBMF establece el inicio analítico de la Fase de Griffiths en $\beta_c(q_{\text{perc}}) = 0.225$, las simulaciones revelan que el decaimiento algebraico estricto se manifiesta a valores superiores ($\beta \gtrsim 0.45$). Esta diferencia se debe a que las aproximaciones de campo medio asumen una mezcla topológica perfecta e ignoran las correlaciones dinámicas locales. En una red real, la reinfección mutua entre nodos vecinos favorece el estancamiento y la extinción prematura de la epidemia en los clústeres aislados. Al despreciar estas correlaciones, la aproximación DBMF sobreestima la capacidad de propagación, resultando en un umbral analítico estrictamente inferior al empírico.
+	Al contrastar las predicciones teóricas con los datos empíricos (Fig. \ref{fig:espectro_q09}), se observa una desviación sistemática en los umbrales de transición. Mientras que la aproximación DBMF establece el inicio analítico de la Fase de Griffiths en $\beta_c(q_{\text{perc}}) = 0.225$, las simulaciones muestran que el decaimiento algebraico estricto se manifiesta a valores superiores ($\beta \gtrsim 0.45$). Esta diferencia se debe a que las aproximaciones de campo medio asumen una mezcla topológica perfecta e ignoran las correlaciones dinámicas locales. En una red real, la reinfección mutua entre nodos vecinos favorece el estancamiento y la extinción prematura de la epidemia en los clústeres aislados. Al despreciar estas correlaciones, la aproximación DBMF sobreestima la capacidad de propagación, resultando en un umbral analítico estrictamente inferior al empírico.
 	
 	\begin{figure}[htbp]
 		\centering
@@ -255,7 +255,7 @@ aps,
 		\label{fig:espectro_q09}
 	\end{figure}
 	
-	En segundo lugar, el decaimiento algebraico asintótico expuesto anteriormente, asume el límite termodinámico ($N \to \infty$), condición necesaria para permitir la existencia de regiones raras de tamaño arbitrariamente grande~\cite{Muñoz2010,Noest1986,Odor2004}. En simulaciones de tamaño finito ($N=10^5$), el tamaño estructural de dichas islas está matemáticamente acotado. En consecuencia, el tiempo máximo que el patógeno puede sobrevivir confinado en ellas está limitado, produciéndose un truncamiento por tamaño finito (\textit{finite-size cutoff}) que desvía la relajación algebraica hacia una caída exponencial. Como se evidencia en la Fig. \ref{fig:finite_size}, la duración del régimen invariante de escala crece sistemáticamente con el tamaño del sistema $N$, corroborando que la relajación anómala está dictada por las fluctuaciones de las regiones raras.
+	En segundo lugar, el decaimiento algebraico asintótico expuesto anteriormente asume el límite termodinámico ($N \to \infty$), condición necesaria para permitir la existencia de regiones raras de tamaño arbitrariamente grande~\cite{Muñoz2010,Noest1986,Odor2004}. En simulaciones de tamaño finito ($N=10^5$), el tamaño estructural de dichas islas está matemáticamente acotado. En consecuencia, el tiempo máximo que el patógeno puede sobrevivir confinado en ellas está limitado, produciéndose un truncamiento por tamaño finito (\textit{finite-size cutoff}) que desvía la relajación algebraica hacia una caída exponencial. Como se evidencia en la Fig. \ref{fig:finite_size}, la duración del régimen invariante de escala crece sistemáticamente con el tamaño del sistema $N$, corroborando que la relajación anómala está dictada por las fluctuaciones de las regiones raras.
 	
 	\begin{figure}[htbp]
 		\centering
@@ -286,7 +286,7 @@ aps,
 	
 	El resultado que más sorprende no es el colapso del umbral epidémico en redes de Barabási-Albert (eso lo predice la teoría), sino la robustez con la que la Fase de Griffiths sobrevive en simulaciones de tamaño finito. Aunque lo que se podría llegar a esperar en un principio es el desvanecimiento del régimen algebraico llegado a cierto punto de la simulación, con redes grandes ($N \sim 10^5$), se ha visto que esa tendencia ``recta'' (con forma de ley de potencias), se mantiene hasta llegar al límite físico impuesto por el tamaño finito de esta.
 	
-	Como resumen, este estudio constata que la heterogeneidad de grado y el desorden topológico no actúan como meras perturbaciones al modelo SIS clásico, sino como los verdaderos mecanismos que alteran la clase de universalidad del sistema, dictando los tiempos de supervivencia del patógeno y redefiniendo por completo las fronteras de la criticidad epidémica. El hecho de cambiar las propiedades de la red en la que se trabaja (no solo el modelo), cambia la física completamente, por lo que este es un ejemplo de como en un sistema es posible que emerjan ciertas propiedades macroscópicas, que solamente se pueden estudiar observando al sistema en su conjunto, y no sobre los elementos individuales.
+	Como resumen, este estudio constata que la heterogeneidad de grado y el desorden topológico no actúan como meras perturbaciones al modelo SIS clásico, sino como los verdaderos mecanismos que alteran la clase de universalidad del sistema, dictando los tiempos de supervivencia del patógeno y redefiniendo por completo las fronteras de la criticidad epidémica. El hecho de cambiar las propiedades de la red en la que se trabaja (no solo el modelo), cambia la física completamente, por lo que este es un ejemplo de cómo en un sistema es posible que emerjan ciertas propiedades macroscópicas, que solamente se pueden estudiar observando al sistema en su conjunto, y no sobre los elementos individuales.
 	
 	\section*{Disponibilidad de Código y Datos}
 	El código fuente íntegro desarrollado para la ejecución de las simulaciones estocásticas, los cálculos analíticos, el tratamiento de datos espaciales y la generación de los diagramas de fases y espectros de relajación presentados en este trabajo, se encuentra publicado y accesible de forma abierta en el siguiente repositorio: \url{https://github.com/QuendoDev/SIS-Complex-Networks}.
@@ -476,7 +476,7 @@ aps,
 	
 	De forma análoga, la relajación dinámica de la densidad de infectados evaluada exactamente sobre la frontera crítica obedece una ley de potencias $\rho(t) \sim t^{-\delta}$, caracterizada por el exponente dinámico temporal. En el límite de campo medio, este exponente dinámico adopta igualmente un valor unitario ($\delta = 1$). Estas predicciones universales constituyen el marco teórico fundamental sobre el que se validan empíricamente los exponentes extraídos mediante escalamiento computacional~\cite{Odor2004,Noest1986}.
 	
-	\bibliography{report}
+	\bibliography{apssamp}
 	
 \end{document}
 % ****** End of file apssamp.tex ******
